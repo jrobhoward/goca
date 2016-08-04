@@ -18,14 +18,9 @@ import (
 	"os/user"
 	"sort"
 	"strconv"
+	"github.com/jrobhoward/goca/util"
 	"time"
 )
-
-func assertSuccess(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
 
 type RsaKeyLength int64
 type rsaKeyLengthFlag struct{ RsaKeyLength }
@@ -100,18 +95,18 @@ func printCommands() {
 // NOTICE: This is the golang init function
 func init() {
 	usr, err := user.Current()
-	assertSuccess(err)
+	util.AssertSuccess(err)
 
 	flag.StringVar(&cadb, "cadb", usr.HomeDir+"/.cadb", "CA database file")
 
 	if _, err := os.Stat(cadb); os.IsNotExist(err) {
 		f, err := os.OpenFile(cadb, os.O_CREATE, 0600)
-		assertSuccess(err)
+		util.AssertSuccess(err)
 		f.Close()
 	}
 
 	fileInfo, err := os.Stat(cadb)
-	assertSuccess(err)
+	util.AssertSuccess(err)
 	if fileInfo.Mode() != 0600 {
 		log.Fatalf("The cadb file (%s) has bad permissions (should be 0600), aborting.", cadb)
 	}
@@ -126,7 +121,7 @@ func generateSerialNumber(db *bolt.DB, commonName string) (n *big.Int, err error
 		for serialNumber == nil {
 			serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 			serialNumber, err = rand.Int(rand.Reader, serialNumberLimit)
-			assertSuccess(err)
+			util.AssertSuccess(err)
 
 			// what are the odds a serial number already exists?
 			if b.Get([]byte(serialNumber.String())) != nil {
@@ -146,31 +141,31 @@ func performInit(db *bolt.DB) {
 		b := tx.Bucket([]byte("CaConfig"))
 		if b == nil {
 			b, err = tx.CreateBucketIfNotExists([]byte("CaConfig"))
-			assertSuccess(err)
+			util.AssertSuccess(err)
 
 			err = b.Put([]byte("schema_version"), []byte("1"))
-			assertSuccess(err)
+			util.AssertSuccess(err)
 
 			err = b.Put([]byte("ca_cert_keylen"), []byte(strconv.FormatInt(int64(*caKeyLength), 10)))
-			assertSuccess(err)
+			util.AssertSuccess(err)
 
 			err = b.Put([]byte("host_default_keylen"), []byte(strconv.FormatInt(int64(*hostKeyLength), 10)))
-			assertSuccess(err)
+			util.AssertSuccess(err)
 
 			err = b.Put([]byte("ca_commonname"), []byte(*commonName))
-			assertSuccess(err)
+			util.AssertSuccess(err)
 
 			err = b.Put([]byte("ca_organization"), []byte(*organization))
-			assertSuccess(err)
+			util.AssertSuccess(err)
 
 			err = b.Put([]byte("ca_serial_number"), []byte("1"))
-			assertSuccess(err)
+			util.AssertSuccess(err)
 
 			err = b.Put([]byte("ca_key"), []byte(""))
-			assertSuccess(err)
+			util.AssertSuccess(err)
 
 			err = b.Put([]byte("ca_certificate"), []byte(""))
-			assertSuccess(err)
+			util.AssertSuccess(err)
 		}
 
 		b, err = tx.CreateBucketIfNotExists([]byte("SerialNumbers"))
@@ -180,7 +175,7 @@ func performInit(db *bolt.DB) {
 
 		return nil
 	})
-	assertSuccess(err)
+	util.AssertSuccess(err)
 
 	var priv *rsa.PrivateKey
 	priv, err = rsa.GenerateKey(rand.Reader, int(*caKeyLength))
@@ -193,14 +188,14 @@ func performInit(db *bolt.DB) {
 		notBefore = time.Now()
 	} else {
 		notBefore, err = time.Parse("2016/06/15 21:42:51", *validFrom)
-		assertSuccess(err)
+		util.AssertSuccess(err)
 	}
 
 	notAfter := notBefore.Add(*caValidFor)
 
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
-	assertSuccess(err)
+	util.AssertSuccess(err)
 
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
@@ -228,27 +223,27 @@ func performInit(db *bolt.DB) {
 	}
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
-	assertSuccess(err)
+	util.AssertSuccess(err)
 
 	err = db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("CaConfig"))
 
 		err = b.Put([]byte("ca_certificate"), derBytes)
-		assertSuccess(err)
+		util.AssertSuccess(err)
 
 		return nil
 	})
-	assertSuccess(err)
+	util.AssertSuccess(err)
 
 	err = db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("CaConfig"))
 
 		err = b.Put([]byte("ca_key"), x509.MarshalPKCS1PrivateKey(priv))
-		assertSuccess(err)
+		util.AssertSuccess(err)
 
 		return nil
 	})
-	assertSuccess(err)
+	util.AssertSuccess(err)
 }
 
 func performCreate(db *bolt.DB) {
@@ -257,7 +252,7 @@ func performCreate(db *bolt.DB) {
 
 func performList(db *bolt.DB) {
 	sn, err := generateSerialNumber(db, *commonName)
-	assertSuccess(err)
+	util.AssertSuccess(err)
 	log.Fatalf(sn.String())
 }
 
@@ -311,7 +306,7 @@ func main() {
 	flag.Parse()
 
 	db, err := bolt.Open(cadb, 0600, nil)
-	assertSuccess(err)
+	util.AssertSuccess(err)
 	defer db.Close()
 
 	if len(*command) == 0 {
